@@ -18,11 +18,13 @@
     "@hono/node-server": "^1.14.4",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.2",
+    "geoip-lite": "^2.0.2",
     "hono": "^4.6.16",
     "postgres": "^3.4.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/geoip-lite": "^1.4.4",
     "@types/node": "^22.10.6",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.2",

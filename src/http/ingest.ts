@@ -5,6 +5,7 @@ import { db } from "../db/client.js";
 import { gameEvents, games, gameSessions } from "../db/schema.js";
 import { env } from "../env.js";
 import { isOriginAllowed, normalizeOrigin } from "./origins.js";
+import { privacyModeForIp, sanitizeReducedProperties, stripUrlDetails } from "./privacy.js";
 import { ingestBodySchema, normalizeEvents } from "./validation.js";
 
 type Game = typeof games.$inferSelect;
@@ -37,13 +38,29 @@ export async function ingestEvents(c: Context) {
 
   const now = new Date();
   const requestUserAgent = c.req.header("user-agent") ?? undefined;
-  const ipHash = hashIp(clientIp(c));
+  const ip = clientIp(c);
+  const privacyMode = privacyModeForIp(ip);
+  const reducedPrivacy = privacyMode === "reduced";
+  const ipHash = reducedPrivacy ? null : hashIp(ip);
   const events = normalizeEvents(body.data);
   const sessionExternalId = body.data.sessionId ?? events.find((event) => event.sessionId)?.sessionId;
-  const anonymousId = body.data.anonymousId ?? events.find((event) => event.anonymousId)?.anonymousId;
-  const playerId = body.data.playerId ?? events.find((event) => event.playerId)?.playerId;
+  const anonymousId = reducedPrivacy
+    ? null
+    : body.data.anonymousId ?? events.find((event) => event.anonymousId)?.anonymousId ?? null;
+  const playerId = reducedPrivacy
+    ? null
+    : body.data.playerId ?? events.find((event) => event.playerId)?.playerId ?? null;
   const buildId = body.data.buildId ?? events.find((event) => event.buildId)?.buildId;
-  const userAgent = body.data.context?.userAgent ?? requestUserAgent;
+  const userAgent = reducedPrivacy ? null : body.data.context?.userAgent ?? requestUserAgent ?? null;
+  const pageUrl = reducedPrivacy
+    ? stripUrlDetails(body.data.context?.pageUrl)
+    : body.data.context?.pageUrl ?? null;
+  const referrer = reducedPrivacy
+    ? stripUrlDetails(body.data.context?.referrer)
+    : body.data.context?.referrer ?? null;
+  const sessionProperties = reducedPrivacy
+    ? sanitizeReducedProperties(body.data.sessionProperties)
+    : body.data.sessionProperties;
 
   const sessionId = sessionExternalId
     ? await upsertSession({
@@ -53,11 +70,11 @@ export async function ingestEvents(c: Context) {
         playerId,
         buildId,
         origin,
-        pageUrl: body.data.context?.pageUrl,
-        referrer: body.data.context?.referrer,
+        pageUrl,
+        referrer,
         userAgent,
         ipHash,
-        properties: body.data.sessionProperties,
+        properties: sessionProperties,
         lastSeenAt: now
       })
     : null;
@@ -74,15 +91,15 @@ export async function ingestEvents(c: Context) {
         sessionId,
         clientEventId: event.clientEventId,
         name: event.name,
-        anonymousId: event.anonymousId ?? anonymousId,
-        playerId: event.playerId ?? playerId,
+        anonymousId: reducedPrivacy ? null : event.anonymousId ?? anonymousId,
+        playerId: reducedPrivacy ? null : event.playerId ?? playerId,
         buildId: event.buildId ?? buildId,
         origin,
-        pageUrl: body.data.context?.pageUrl,
-        referrer: body.data.context?.referrer,
+        pageUrl,
+        referrer,
         userAgent,
         ipHash,
-        properties: event.properties,
+        properties: reducedPrivacy ? sanitizeReducedProperties(event.properties) : event.properties,
         occurredAt,
         receivedAt: now
       })
@@ -113,13 +130,13 @@ function hasValidWriteKey(c: Context, game: Game): boolean {
 async function upsertSession(input: {
   game: Game;
   externalSessionId: string;
-  anonymousId?: string;
-  playerId?: string;
+  anonymousId: string | null;
+  playerId: string | null;
   buildId?: string;
   origin: string | null;
-  pageUrl?: string;
-  referrer?: string;
-  userAgent?: string;
+  pageUrl: string | null;
+  referrer: string | null;
+  userAgent: string | null;
   ipHash: string | null;
   properties: Record<string, unknown>;
   lastSeenAt: Date;

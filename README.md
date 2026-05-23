@@ -64,6 +64,20 @@ Wildcard subdomains are supported:
 https://*.itch.zone
 ```
 
+## Reduced Privacy Regions
+
+The ingest server applies reduced privacy mode centrally based on the request IP's country lookup. EU countries, the UK, Switzerland, and nearby high-risk European microstates are reduced by default. Unknown IP lookups are also reduced.
+
+Reduced mode still accepts session-scoped gameplay events, but it does not persist cross-session/player identifiers or request metadata that is more privacy-sensitive:
+
+- `anonymousId` and `playerId` are dropped.
+- IP hashes are not stored.
+- User agents are not stored.
+- `pageUrl` and `referrer` keep only origin + path.
+- Obvious URL/error-message fields are stripped from event/session properties.
+
+This means individual games do not need to implement their own region checks to avoid persistent analytics IDs for these regions.
+
 ## Local Setup
 
 ```bash
