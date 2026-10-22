@@ -1,0 +1,22 @@
+# Routine dependency updates. Security updates are configured in the repo settings
+# and are not delayed by the cooldown.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Supply-chain attacks usually ship as brand-new releases that are pulled within
+    # days; only propose versions that have been public for a while.
+    cooldown:
+      default-days: 5
+    open-pull-requests-limit: 5
+    groups:
+      runtime:
+        # Bundled into the Lambda; merging these needs `npm run deploy`.
+        patterns: ["hono", "zod"]
+      aws:
+        patterns: ["@aws-sdk/*", "aws-cdk", "aws-cdk-lib", "constructs"]
+      tooling:
+        patterns: ["*"]
+        exclude-patterns: ["hono", "zod", "@aws-sdk/*", "aws-cdk", "aws-cdk-lib", "constructs"]
