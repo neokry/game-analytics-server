@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export type JsonRecord = Record<string, unknown>;
+
 const jsonRecordSchema = z.record(z.string(), z.unknown());
 
 export const eventInputSchema = z.object({

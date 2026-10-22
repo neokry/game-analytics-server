@@ -7,9 +7,8 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "dist",
-    "rootDir": ".",
+    "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "drizzle.config.ts"]
+  "include": ["src/**/*.ts", "infra/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
 }

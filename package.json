@@ -1,36 +1,31 @@
 {
   "name": "analytics-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/src/server.js",
-    "railway:start": "npm run db:migrate && npm run start",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts",
-    "db:studio": "drizzle-kit studio",
-    "seed:game": "tsx scripts/seed-game.ts"
+    "test": "tsx --test test/*.test.ts",
+    "cdk": "cdk",
+    "deploy": "cdk deploy --require-approval never",
+    "athena:views": "tsx scripts/create-athena-views.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.4",
-    "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.45.2",
-    "geoip-lite": "^2.0.2",
+    "@aws-sdk/client-firehose": "^3.700.0",
     "hono": "^4.6.16",
-    "postgres": "^3.4.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/geoip-lite": "^1.4.4",
+    "@aws-sdk/client-athena": "^3.700.0",
+    "@aws-sdk/client-cloudformation": "^3.700.0",
+    "@hono/node-server": "^1.14.4",
     "@types/node": "^22.10.6",
-    "drizzle-kit": "^0.31.10",
+    "aws-cdk": "^2.1000.0",
+    "aws-cdk-lib": "^2.200.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.25.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
-  },
-  "overrides": {
-    "esbuild": "^0.25.3"
   }
 }

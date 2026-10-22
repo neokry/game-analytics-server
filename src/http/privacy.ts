@@ -1,5 +1,38 @@
-import geoip from "geoip-lite";
-import type { JsonRecord } from "../db/schema.js";
+import type { JsonRecord } from "./validation.js";
+
+// EU members plus the rest of the EEA, where GDPR applies.
+const EEA_COUNTRIES = new Set([
+  "AT",
+  "BE",
+  "BG",
+  "HR",
+  "CY",
+  "CZ",
+  "DK",
+  "EE",
+  "FI",
+  "FR",
+  "DE",
+  "GR",
+  "HU",
+  "IE",
+  "IT",
+  "LV",
+  "LT",
+  "LU",
+  "MT",
+  "NL",
+  "PL",
+  "PT",
+  "RO",
+  "SK",
+  "SI",
+  "ES",
+  "SE",
+  "IS",
+  "LI",
+  "NO"
+]);
 
 const ALWAYS_REDUCED_COUNTRIES = new Set([
   "AD",
@@ -26,14 +59,13 @@ const SENSITIVE_PROPERTY_KEYS = new Set([
 
 export type PrivacyMode = "standard" | "reduced";
 
-export function privacyModeForIp(ip: string | null): PrivacyMode {
-  if (!ip) return "reduced";
+// `country` is CloudFront's viewer country code. Requests that did not come through
+// CloudFront (or that it could not place) have none and are treated as reduced.
+export function privacyModeForCountry(country: string | null): PrivacyMode {
+  if (!country) return "reduced";
 
-  const geo = geoip.lookup(ip);
-  if (!geo) return "reduced";
-
-  if (geo.eu === "1") return "reduced";
-  if (ALWAYS_REDUCED_COUNTRIES.has(geo.country)) return "reduced";
+  const code = country.toUpperCase();
+  if (EEA_COUNTRIES.has(code) || ALWAYS_REDUCED_COUNTRIES.has(code)) return "reduced";
 
   return "standard";
 }

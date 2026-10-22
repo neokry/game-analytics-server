@@ -1,14 +1,22 @@
 # Analytics Server
 
-Shared analytics ingestion service for browser games deployed on itch.io and hosted on Railway with Railway Postgres.
+Shared analytics ingestion for browser games deployed on itch.io, running serverless on AWS (account 360444545306, us-east-2):
+
+```text
+game -> CloudFront -> Lambda (Hono) -> Firehose -> S3 (Parquet, game/dt partitions) -> Athena
+```
+
+There is no database and no stored secret. The Lambda's role can only write to the Firehose stream; Firehose batches events for up to 5 minutes and writes Parquet files to S3.
 
 ## Shape
 
-- `games` controls the game slug, enabled state, allowed browser origins, and optional public write key.
-- `game_sessions` stores one row per game play session when the client sends a `sessionId`.
-- `game_events` stores generic event rows with flexible `jsonb` properties.
+- Games are configured in `src/games.ts`: slug, enabled state, allowed browser origins, and optional public write key.
+- Each accepted event becomes one row in the Athena table `game_analytics.events_raw`, with the session fields copied onto it. Event and session properties are stored as JSON strings.
+- Athena views (`athena/views.sql`):
+  - `events`: `events_raw` with client retries removed (first copy per `client_event_id`).
+  - `sessions`: one row per game session, derived from its events.
 
-The first client endpoint is batch-first:
+The client endpoint is unchanged and batch-first:
 
 ```http
 POST /v1/games/:gameSlug/events
@@ -24,105 +32,68 @@ POST /v1/games/:gameSlug/events
     "referrer": "https://itch.io"
   },
   "events": [
-    {
-      "name": "session_start",
-      "properties": {
-        "mode": "singleplayer"
-      }
-    },
-    {
-      "name": "level_started",
-      "properties": {
-        "level": 1
-      }
-    }
+    { "name": "session_start", "properties": { "mode": "singleplayer" } },
+    { "name": "level_started", "properties": { "level": 1 } }
   ]
 }
 ```
 
-Single-event payloads are also accepted:
-
-```json
-{
-  "sessionId": "session_123",
-  "name": "button_clicked",
-  "properties": {
-    "button": "play"
-  }
-}
-```
+Single-event payloads (`{ "sessionId": "...", "name": "...", "properties": {} }`) are also accepted.
 
 ## Origin Allowlist
 
-The server rejects browser requests whose `Origin` is not listed on the `games.allowed_origins` row. This is useful for limiting normal browser traffic to your itch.io pages, but it is not a secret. Non-browser callers can forge headers. If a game needs stronger protection later, add a server-side proxy or a signed request flow.
+Requests whose `Origin` is not in the game's `allowedOrigins` are rejected. This limits normal browser traffic to your itch.io pages but is not a secret: non-browser callers can forge headers.
 
-For itch.io HTML5 games, the page can be `https://neokry.itch.io`, while the embedded game may execute from an itch CDN origin such as `https://html-classic.itch.zone`. The current Dead Letters page embeds the fullscreen game from `https://html-classic.itch.zone/html/17381590-1656681/index.html`. Allowlist the actual `Origin` shown in rejected server logs.
-
-Wildcard subdomains are supported:
-
-```text
-https://*.itch.zone
-```
+For itch.io HTML5 games the page is `https://neokry.itch.io`, but the embedded game runs from an itch CDN origin such as `https://html-classic.itch.zone`, so `https://*.itch.zone` is allowlisted. Wildcard subdomains are supported.
 
 ## Reduced Privacy Regions
 
-The ingest server applies reduced privacy mode centrally based on the request IP's country lookup. EU countries, the UK, Switzerland, and nearby high-risk European microstates are reduced by default. Unknown IP lookups are also reduced.
+Privacy mode comes from CloudFront's viewer country (`CloudFront-Viewer-Country`). EEA countries, the UK, Switzerland, and nearby European microstates are reduced. Requests with no country (including any that bypass CloudFront) are reduced too.
 
-Reduced mode still accepts session-scoped gameplay events, but it does not persist cross-session/player identifiers or request metadata that is more privacy-sensitive:
+Reduced mode still stores session-scoped gameplay events, but:
 
 - `anonymousId` and `playerId` are dropped.
-- IP hashes are not stored.
 - User agents are not stored.
 - `pageUrl` and `referrer` keep only origin + path.
 - Obvious URL/error-message fields are stripped from event/session properties.
 
-This means individual games do not need to implement their own region checks to avoid persistent analytics IDs for these regions.
+IP addresses are never stored, hashed or otherwise.
 
-## Local Setup
+## Querying
+
+Use the Athena console with workgroup `game-analytics` and database `game_analytics`, or DuckDB against the S3 files. Always filter on `dt` (and `game`) so Athena only scans the days you need:
+
+```sql
+SELECT name, count(*) AS events
+FROM events
+WHERE game = 'dead-letters' AND dt >= '2026-10-01'
+GROUP BY name
+ORDER BY events DESC;
+```
+
+## Development
 
 ```bash
 npm install
-cp .env.example .env
-npm run db:generate
-npm run db:migrate
-ALLOWED_ORIGINS=http://localhost:5173,https://neokry.itch.io,https://*.itch.zone npm run seed:game
-npm run dev
+npm test          # ingest tests against an in-memory sink
+npm run dev       # local server on :3000; accepted events are printed
 ```
 
-## Railway Setup
+## Deploy
 
-Create a Railway service from this folder and attach Railway Postgres. Set:
-
-```text
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-NODE_ENV=production
-ALLOW_MISSING_ORIGIN=false
-IP_HASH_SALT=<random long secret>
-```
-
-The included `railway.json` starts the server with:
+Infrastructure is AWS CDK in `infra/`.
 
 ```bash
-npm run db:migrate && npm run start
+npm run deploy        # cdk deploy; prints IngestUrl
+npm run athena:views  # create or update the Athena views
 ```
 
-Seed the first game after the database is available:
+Adding a game: add it to `src/games.ts` and deploy. That also adds it to the Athena partition list.
 
-```bash
-GAME_SLUG=dead-letters GAME_NAME="Dead Letters" ALLOWED_ORIGINS=https://neokry.itch.io,https://*.itch.zone npm run seed:game
-```
+## Data Before October 2026
+
+Events up to the AWS cutover were collected by the old Railway + Postgres version of this service and copied into the same S3 layout with `scripts/migrate-from-railway/`. Those rows have no `country`, and their stored IP hashes were dropped during the copy.
 
 ## Event Naming
 
-Use stable, lower-case names like:
-
-- `session_start`
-- `session_end`
-- `level_started`
-- `level_completed`
-- `run_started`
-- `run_ended`
-- `choice_made`
-- `error_seen`
-
-Put game-specific details in `properties`, not in the event name.
+Use stable, lower-case names like `session_start`, `session_end`, `level_started`, `level_completed`, `run_started`, `run_ended`, `choice_made`, `error_seen`. Put game-specific details in `properties`, not in the event name.
