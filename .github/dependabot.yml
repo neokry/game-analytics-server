@@ -11,12 +11,21 @@ updates:
     cooldown:
       default-days: 5
     open-pull-requests-limit: 5
+    ignore:
+      # Types must match the Lambda runtime (Node 22); bump with the runtime instead.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    # Groups only take minor and patch updates, so each major upgrade arrives as its
+    # own PR to review on its own.
     groups:
       runtime:
         # Bundled into the Lambda; merging these needs `npm run deploy`.
         patterns: ["hono", "zod"]
+        update-types: ["minor", "patch"]
       aws:
         patterns: ["@aws-sdk/*", "aws-cdk", "aws-cdk-lib", "constructs"]
+        update-types: ["minor", "patch"]
       tooling:
         patterns: ["*"]
         exclude-patterns: ["hono", "zod", "@aws-sdk/*", "aws-cdk", "aws-cdk-lib", "constructs"]
+        update-types: ["minor", "patch"]
