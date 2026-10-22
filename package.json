@@ -8,8 +8,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "cdk": "cdk",
-    "deploy": "cdk deploy --require-approval never",
-    "athena:views": "tsx scripts/create-athena-views.ts"
+    "deploy": "cdk deploy GameAnalytics --require-approval never",
+    "athena:views": "tsx scripts/create-athena-views.ts",
+    "deploy:github-role": "cdk deploy GameAnalyticsGitHubDeploy"
   },
   "dependencies": {
     "@aws-sdk/client-firehose": "^3.700.0",

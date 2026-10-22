@@ -29,3 +29,11 @@ updates:
         patterns: ["*"]
         exclude-patterns: ["hono", "zod", "@aws-sdk/*", "aws-cdk", "aws-cdk-lib", "constructs"]
         update-types: ["minor", "patch"]
+
+  # Workflow actions are pinned to commit SHAs; this keeps the pins current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 5

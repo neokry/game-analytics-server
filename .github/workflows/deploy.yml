@@ -1,0 +1,44 @@
+# Deploys the GameAnalytics stack whenever main changes (e.g. a merged PR).
+# AWS access comes from GitHub OIDC: the `production` environment is the only thing the
+# deploy role trusts, and that environment only accepts the main branch.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::360444545306:role/github-game-analytics-deploy
+          aws-region: us-east-2
+      - name: Deploy
+        run: npx cdk deploy GameAnalytics --require-approval never
+      - name: Smoke test
+        run: curl --fail --silent --show-error --max-time 15 https://dlj17wokqo46x.cloudfront.net/health
