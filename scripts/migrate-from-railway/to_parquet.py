@@ -1,8 +1,11 @@
 """Converts exported NDJSON chunks to Parquet laid out like Firehose output:
-<out>/game=<slug>/dt=<yyyy-mm-dd>/railway_<n>.parquet
+<out>/game=<slug>/dt=<yyyy-mm-dd>/<prefix>_<n>.parquet
 
-Usage: python to_parquet.py <export-dir> <out-dir>
-Then: aws s3 sync <out-dir> s3://<bucket>/events/
+Usage: python to_parquet.py <export-dir> <out-dir> [prefix]
+Then: aws s3 cp <out-dir> s3://<bucket>/events/ --recursive
+
+Give each later export (e.g. a final delta) its own prefix: files with the same name
+in a day's folder would overwrite the earlier export.
 """
 
 import sys
@@ -10,6 +13,7 @@ import sys
 import duckdb
 
 export_dir, out_dir = sys.argv[1], sys.argv[2]
+prefix = sys.argv[3] if len(sys.argv) > 3 else "railway"
 
 columns = {
     "event_id": "VARCHAR",
@@ -44,7 +48,7 @@ con.execute(
       FROM read_json('{export_dir}/*.ndjson.gz', format = 'newline_delimited', columns = {columns})
     )
     TO '{out_dir}' (FORMAT parquet, COMPRESSION snappy, PARTITION_BY (game, dt),
-                    FILENAME_PATTERN 'railway_{{i}}', OVERWRITE_OR_IGNORE)
+                    FILENAME_PATTERN '{prefix}_{{i}}', OVERWRITE_OR_IGNORE)
     """
 )
 
