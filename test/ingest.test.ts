@@ -81,6 +81,17 @@ test("rejects unknown games, disallowed origins and bad payloads", async () => {
   assert.equal((await post({ sessionId: "s" }).response).status, 400);
 });
 
+test("validates event timestamps and reports field errors", async () => {
+  const bad = await post({ events: [{ name: "x", occurredAt: "yesterday" }] }).response;
+  assert.equal(bad.status, 400);
+  const body = await bad.json();
+  assert.equal(body.error, "Invalid payload");
+  assert.ok(body.details.fieldErrors.events, "field errors name the events array");
+
+  const good = await post({ events: [{ name: "x", occurredAt: "2026-10-22T10:00:00Z" }] }).response;
+  assert.equal(good.status, 200);
+});
+
 test("answers CORS preflight for allowed origins", async () => {
   const app = createApp(new MemorySink());
   const res = await app.request("/v1/games/dead-letters/events", {

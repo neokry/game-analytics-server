@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Context } from "hono";
+import { flattenError } from "zod";
 import { findGame, type GameConfig } from "../games.js";
 import type { EventRecord, EventSink } from "../sink.js";
 import { isOriginAllowed, normalizeOrigin } from "./origins.js";
@@ -29,7 +30,7 @@ export function createIngestHandler(sink: EventSink) {
 
     const body = ingestBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!body.success) {
-      return c.json({ error: "Invalid payload", details: body.error.flatten() }, 400);
+      return c.json({ error: "Invalid payload", details: flattenError(body.error) }, 400);
     }
 
     const now = Date.now();
